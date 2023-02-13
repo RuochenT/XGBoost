@@ -6,6 +6,7 @@ library(xgboost)
 library(Matrix)
 library(ROSE) #oversampling
 library(SHAPforxgboost)
+library(adabag)
 library(data.table)
 library(dplyr)
 library(ggcorrplot)#check correlation
@@ -43,21 +44,41 @@ prop.table(table(train_over$HeartDisease)) #0.56 is "no"
 setDT(train_over) 
 setDT(test)
 
-#-------- one hot encoding for all categorical variables.
+
+# ---------- Adaboost
+train_over_1<-train_over
+train_over_1$HeartDisease<-revalue(train_over_1$HeartDisease, c("No"="0", "Yes" ="1"))
+test_1<-test
+test_1$HeartDisease<-revalue(test_1$HeartDisease, c("No"="0", "Yes" ="1"))
+model = boosting(HeartDisease~., data = train_over_1 , boos = TRUE, mfinal =100) #100 iterations
+pred.adaboost = predict(model , test_1)
+pred.adaboost$confusion
+pred.adaboost$error # accuracy 0.796
+
+# confustion matrix
+library(tibble)
+library(cvms)
+cm_ada<-as_tibble(pred.adaboost$confusion)
+cm_ada_1<-plot_confusion_matrix(cm_ada, target_col = "Observed Class", prediction_col = "Predicted Class",counts_col = "n")
+cm_ada_1
+
+#--------- data preparation for XGBoost
+# one hot encoding for all categorical variables.
 labels <- train_over$HeartDisease
 ts_label <- test$HeartDisease
 new_tr <- model.matrix(~.+0,data = train_over[,-c("HeartDisease"),with=F]) 
 new_ts <- model.matrix(~.+0,data = test[,-c("HeartDisease"),with=F])
 
-#-------- convert factor to numeric 
+# convert factor to numeric 
 labels <- as.numeric(labels)-1
 ts_label <- as.numeric(ts_label)-1
 
-#-------- preparing matrix 
+# preparing matrix 
 dtrain <- xgb.DMatrix(data = new_tr,label = labels) 
 dtest <- xgb.DMatrix(data = new_ts,label=ts_label)
 
-#------- default parameters
+#-------------- XGBoost
+# first model with default parameters.
 params <- list(booster = "gbtree", objective = "binary:logistic",
                eta=0.3, gamma=0, max_depth=6, min_child_weight=1, 
                subsample=1, colsample_bytree=1)
@@ -66,7 +87,7 @@ xgbcv <- xgb.cv( params = params, data = dtrain, nrounds = 100,
                  early_stop_rounds = 20, maximize = F)
 min(xgbcv$evaluation_log$test_logloss_mean) #round100
 
-#------- first default - model training
+# first default - model training
 xgb1 <- xgb.train(params = params, data = dtrain, nrounds = 100, 
                   watchlist = list(val=dtest,train=dtrain), 
                   print_every_n = 10, early_stop_rounds = 20, 
@@ -79,7 +100,7 @@ xgbpred <- ifelse (xgbpred > 0.5,1,0)
 #------- confusion matrix
 c<-confusionMatrix (as.factor(xgbpred), as.factor(ts_label)) #acc 85.84 percent
 
-#------- confusion matrix in a nice table 
+# confusion matrix in a nice table 
 cfm <- as_tibble(c$table)
 cfm_1<-plot_confusion_matrix(cfm, 
                              target_col = "Reference", 
