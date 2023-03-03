@@ -28,7 +28,7 @@ The forceplot for local interpretation (for observation 200 - 350).
 ## Conclusion
 The result from the best model shows that the model has accuracy of 82.8 %, sensitivity of 41.8 %, and specificity of 90.9%. From the summary plot, the five most important factors are BMI, gender, the diﬀiculty of walking or climbing up the stairs, being diabetic, and being 80 years and older. 
 
-## Reference 
+## References
 
 Centers for Disease Control and Prevention. (2022, July 12). About Heart Disease. Retrieved from https://www.cdc.gov/heartdisease/about.htm
 
